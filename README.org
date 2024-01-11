@@ -1,0 +1,13 @@
+#+TITLE: Image Windowing
+
+* Short Description
+
+This is a small program that cuts a given input image to the specified size
+
+The code is not optimized, nor is it meant to be perfect. It is mainly used as learning opportunity and for testing.
+
+Use it at your own risk.
+
+* Credits
+
+Proudly created without AI.
