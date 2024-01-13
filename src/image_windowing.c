@@ -30,13 +30,26 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
 #include <unistd.h>
 
-
 /* Macros
  *
+ * MAX_BUFF_SIZE                        -- Limits the amount of bytes for the
+input file
+ * BINARY_WRITE                         -- String representing binary write flag
+ * BINARY_READ                          -- String representing binary read flag
+ * BYTES_PER_PIXEL_GRAYSCALE            -- bytes per pixel in a grayscale image
+ * BYTES_PER_PIXEL_RGB565               -- bytes per pixel in a 16bit rgb image
+ * BYTES_PER_PIXEL_RGB888               -- bytes per pixel in a 24bit rgb image
  * */
+#define MAX_BUFF_SIZE                   1024 * 1024 
+#define BINARY_WRITE                    "wb"
+#define BINARY_READ                     "rb"
+#define BYTES_PER_PIXEL_GRAYSCALE       1
+#define BYTES_PER_PIXEL_RGB565          2
+#define BYTES_PER_PIXEL_RGB888          3
 
 
 /* Type declarations
@@ -57,36 +70,74 @@ typedef struct {
     u32 width;
     u32 height;
     usize length;
+    u8 bytes_per_pixel;
 } image;
 
 
-/* Windowing Function
+/* Variable definitions
  *
+ * img              -- Pointer to image struct
  * */
-//void image_windowing(image image, u32 x_offset, u32 y_offset, u32 max_height, u32 max_width){
-void image_windowing(void *buffer, u32 width, u32 height, u32 x_offset, u32 y_offset, u32 max_height, u32 max_width, u8 bytes_per_pixel){
-    if(width > max_width) {
-        fprintf(stderr, "[ERROR]: Given width exceeds image width of %d", max_width);
+static image* img = NULL;
+
+
+/* @brief: Windowing function that cuts an image to a specified size
+ * 
+ * @param: width            -- width of output image
+ * @param: height           -- height of output image
+ * @param: width_offset     -- width offset of output image
+ * @param: height_offset    -- height offset of output image
+ * */
+void image_windowing(u32 width, u32 height, u32 width_offset, u32 height_offset){
+    if(width > img->width) {
+        fprintf(stderr, "[ERROR]: Given width %u exceeds image width of %u", width, img->width);
         exit(1);
     }
-    if(height > max_height) {
-        fprintf(stderr, "[ERROR]: Given height exceeds image heigth of %d", max_height);
+    if(height > img->height) {
+        fprintf(stderr, "[ERROR]: Given height %u exceeds image heigth of %u", height, img->height);
         exit(1);
     }
+    /* Local Variables
+     *
+     * bpp                  - bytes per pixel
+     * width_orig           - width of input image
+     * height_orig          - height of input image
+     * width_offset_corr    - width offset corrected by bpp
+     * width_max_idx        - max width index of selected part of image
+     * height_max_idx       - max heigth index of selected part of image
+     * */
+    u8 bpp=img->bytes_per_pixel; 
+    u32 width_orig = img->width * bpp;
+    u32 height_orig = img->height;
+    u32 width_offset_corr = width_offset * bpp;
+    u32 width_max_idx = width_offset_corr + (width * bpp);  
+    u32 height_max_idx = height_offset + height;
 
-    u8* input_buffer = buffer;
-    u8* output_buffer;
+    u32 output_length = width * height * bpp;
 
-    usize k = 0;
-    for (int i = y_offset * max_width; i < height; i++) {
-        for (int j = x_offset; j < width; j++) {
-            output_buffer[k] = buffer[j + i*max_width];
-            k++;
+    // Calculate new imagge pixels
+    usize output_idx = 0;
+    for (int j = 0; j < height_orig; j++) {
+        for (int i = 0; i < width_orig; i++) {
+            if ((i > width_offset_corr) && (i < width_max_idx) &&
+            (j > height_offset) && (j < height_max_idx)) {
+                img->buffer[output_idx++] = img->buffer[(j + width_orig) + i];
+            }
         }
     }
- 
 
+    // Set remaining index to 0
+    for (; output_idx < output_length; output_idx++) {
+        img->buffer[output_idx] = 0;
+    }
+
+    // Store new dimensions to struct
+    img->width = width;
+    img->height = height;
+    img->length = output_length;
+    return;
 }
+
 
 /* Handle file opening and writing
  * 
@@ -127,7 +178,7 @@ usize file_open_and_write (char *filepath, void * buffer, usize size){
 /* Handle file opening and reading
  * 
  * */
-usize file_open_and_read (char *filepath, char* buffer, usize size){
+usize file_open_and_read (char *filepath, char* buffer){
     // Check file exists
     if (access(filepath, F_OK) != 0){
         fprintf(stderr, "[ERROR]: File '%s' cannot be accessed! Does it exist?", filepath);
@@ -151,10 +202,6 @@ usize file_open_and_read (char *filepath, char* buffer, usize size){
         fprintf(stderr, "[ERROR]: File has '%zu' <= 0 bytes!\n", file_size);
         exit(1);
     }
-    if(file_size > size){
-        fprintf(stderr, "[ERROR]: File size (%zu) is too big. Max size allowed is %zu!\n", file_size, size);
-        exit(1);
-    }
 
     // Read file to memory
     fread(buffer, sizeof(char), file_size, file);
@@ -168,6 +215,67 @@ usize file_open_and_read (char *filepath, char* buffer, usize size){
  * */
 int main(int argc, char *argv[])
 {
+    if (argc <= 4 || argc > 4){
+        fprintf(stderr, "Usage: %s <input file> <output file> <format: none|grayscale|rgb565|rgb888>\n", argv[0]);
+        exit(0);
+    }
+
+    /* Input variables
+     *
+     * read_filepath        -- path to input file
+     * write_filepath       -- path to output file
+     * output_file_size     -- determines size of output file
+     * b_is_grayscale       -- set grayscale output to true/false
+     * */
+    char *read_filepath     = argv[1];
+    char *write_filepath    = argv[2];
+    char* format            = argv[3];
+    usize output_file_size  = 0;
+    
+    /* Variables for scanf
+    *
+    * width                -- stores image width (needed for netpbm formats)
+    * height               -- stores image height (needed for netpbm formats)
+    * */
+    u32 width                   = 0;
+    u32 height                  = 0;
+
+  
+    void* input_buffer = calloc(MAX_BUFF_SIZE, sizeof(char));
+    void* output_buffer = calloc(MAX_BUFF_SIZE, sizeof(u8));
+
+    // Read the input file
+    usize file_size = file_open_and_read(read_filepath, input_buffer);
+
+    // Get dimensions from user, since they cannot be extracted from raw data
+    printf("Enter width: ");
+    scanf("%20u", &width);
+    printf("Enter height: ");
+    scanf("%20u", &height);
+    img->buffer = (u8*) input_buffer;
+
+    if ((strcmp(format, "grayscale") == 0)) {
+      img->bytes_per_pixel = BYTES_PER_PIXEL_GRAYSCALE;
+    } else if ((strcmp(format, "rgb565") == 0)) {
+      img->bytes_per_pixel = BYTES_PER_PIXEL_RGB565;
+    } else if ((strcmp(format, "rgb888") == 0)) {
+      img->bytes_per_pixel = BYTES_PER_PIXEL_RGB888;
+    } else {
+      img->bytes_per_pixel = 1;
+      fprintf(stdout, "No image format given. Assuming %d byte(s) per pixel", img->bytes_per_pixel);
+    }
+
+    // Write the input file to binary, half file size because of concatenation
+    file_size = file_open_and_write(write_filepath, output_buffer,
+                                    output_file_size);
+
+    printf("Sucessfully wrote file '%s' of size '%zu'\n", write_filepath,
+           file_size);
+
+    // Realease pointer
+    free(input_buffer);
+    free(output_buffer);
+    input_buffer = NULL;
+    output_buffer = NULL;
     return EXIT_SUCCESS;
 }
-
