@@ -1,0 +1,21 @@
+BINARY_READ	src/image_windowing.c	49
+BINARY_WRITE	src/image_windowing.c	48
+BYTES_PER_PIXEL_GRAYSCALE	src/image_windowing.c	50
+BYTES_PER_PIXEL_RGB565	src/image_windowing.c	51
+BYTES_PER_PIXEL_RGB888	src/image_windowing.c	52
+MAX_BUFF_SIZE	src/image_windowing.c	47
+Mimage_windowing	src/image_windowing.c	/^int main(int argc, char *argv[])$/
+buffer	src/image_windowing.c	69
+bytes_per_pixel	src/image_windowing.c	73
+file_open_and_read	src/image_windowing.c	/^usize file_open_and_read (char *filepath, char* bu/
+file_open_and_write	src/image_windowing.c	/^usize file_open_and_write (char *filepath, void * /
+height	src/image_windowing.c	71
+image	src/image_windowing.c	74
+image_windowing	src/image_windowing.c	/^void image_windowing(u32 width, u32 height, u32 wi/
+img	src/image_windowing.c	81
+length	src/image_windowing.c	72
+u16	src/image_windowing.c	65
+u32	src/image_windowing.c	66
+u8	src/image_windowing.c	64
+usize	src/image_windowing.c	63
+width	src/image_windowing.c	70
